@@ -1,16 +1,16 @@
 
 -- Preparation des données
-ALTER TABLE varnum_senges.rpg53_2019
+DROP INDEX IF EXISTS rpg35_56_2019_v_idx;
+ALTER TABLE varnum_senges.rpg35_56_2019_v
   ALTER COLUMN geom TYPE geometry(geometry, 4326)
     USING ST_SetSRID(geom,4326);
-DROP INDEX IF EXISTS rpg53_2019_idx;
-CREATE INDEX rpg53_2019_idx ON varnum_senges.rpg53_2019 USING gist (geom);
+CREATE INDEX rpg35_56_2019_v_idx ON varnum_senges.rpg35_56_2019_v USING gist (geom);
 
-ALTER TABLE varnum_senges.rpg53_2018
+DROP INDEX IF EXISTS rpg35_56_2018_v_idx;
+ALTER TABLE varnum_senges.rpg35_56_2018_v
   ALTER COLUMN geom TYPE geometry(geometry, 4326)
     USING ST_SetSRID(geom,4326);
-DROP INDEX IF EXISTS rpg53_2018_idx;
-CREATE INDEX rpg53_2018_idx ON varnum_senges.rpg53_2018 USING gist (geom);
+CREATE INDEX rpg35_56_2018_v_idx ON varnum_senges.rpg35_56_2018_v USING gist (geom);
 
 --Preparation de l'environnement
 Drop table IF EXISTS varnum_senges. test;
@@ -58,12 +58,12 @@ CREATE TYPE varnum_senges.u_overlap_type as (
 											);
 
 
-	CREATE FUNCTION varnum_senges.u_overlap(geometry, int /*fid*/)
+	CREATE FUNCTION varnum_senges.u_overlap(geometry, bigint /*fid*/)
                   RETURNS varnum_senges.u_overlap_type as
 	$$
     SELECT $2::bigint, $1, array_agg(f.inter)
-    FROM  (SELECT c2.geom ,  varnum_senges.u_overlap_sub(c2.fid, ST_Intersection($1, c2.geom))as inter
-        FROM varnum_senges.rpg53_2018  as c2
+    FROM  (SELECT c2.geom ,  varnum_senges.u_overlap_sub(c2.fid1, ST_Intersection($1, c2.geom))as inter
+        FROM varnum_senges.rpg35_56_2018_v  as c2
         where ST_Overlaps($1, c2.geom) /* and ST_area(st_intersection ($1, c2.geom)) > 1*/
 -- 							    and (ST_GeometryType(st_intersection ($1, c2.geom)) = 'ST_Polygon'
 -- 									or ST_GeometryType(st_intersection ($1, c2.geom)) = 'ST_MultiPolygon')
@@ -73,7 +73,7 @@ CREATE TYPE varnum_senges.u_overlap_type as (
 	LANGUAGE SQL ;
 
 -- Vérification des "overlaps" : opération la plus longue à éviter en ensembliste
--- Select varnum_senges.u_overlap(geom) from varnum_senges.rpg53_2019 ORDER BY surf_parc desc LIMIT 1000 ;
+-- Select varnum_senges.u_overlap(geom) from varnum_senges.rpg35_56_2019_v ORDER BY surf_parc desc LIMIT 1000 ;
 
 --____Début traitement_____
 
@@ -85,8 +85,8 @@ CREATE TABLE varnum_senges. atlas(
 
 -- repérage et enregistrement des intersections
 	insert into varnum_senges. atlas (dic) (
-		select (varnum_senges.u_overlap(geom, fid)) FROM (select geom, fid from varnum_senges.rpg53_2019 /* LIMIT 1000 */) a1
-	-- 	select (varnum_senges.u_overlap(geom, fid)).* FROM (select geom, fid from varnum_senges.rpg53_2019 LIMIT 10) a1     --! Syntaxe de séparation des colones
+		select (varnum_senges.u_overlap(geom, fid1)) FROM (select geom, fid1 from varnum_senges.rpg35_56_2019_v /* LIMIT 1000 */) a1
+	-- 	select (varnum_senges.u_overlap(geom, fid)).* FROM (select geom, fid from varnum_senges.rpg35_56_2019_v LIMIT 10) a1     --! Syntaxe de séparation des colones
 		);
 
     -- Select (dic).fid from  varnum_senges.atlas;   -- syntaxe d'appel des colones de type composite
@@ -94,17 +94,17 @@ CREATE TABLE varnum_senges. atlas(
 
     --report des cas non problématiques
     insert into varnum_senges.test (geom, geomtype, step, fid1 ) (
-    	Select c1.geom, ST_GeometryType(c1.geom), 'Report' , c1.fid
-    	from varnum_senges.rpg53_2019 as c1
-    	where c1.id not in (
+    	Select c1.geom, ST_GeometryType(c1.geom), 'Report' , c1.fid1
+    	from varnum_senges.rpg35_56_2019_v as c1
+    	where c1.fid1 not in (
     		select (dic).fid from varnum_senges.atlas )
     	)
     ;
 
         insert into varnum_senges.test (geom, geomtype, step, fid2 ) (
-        	Select c1.geom, ST_GeometryType(c1.geom), 'Report' , c1.fid
-        	from varnum_senges.rpg53_2018 as c1
-        	where c1.id not in (
+        	Select c1.geom, ST_GeometryType(c1.geom), 'Report' , c1.fid1
+        	from varnum_senges.rpg35_56_2018_v as c1
+        	where c1.fid not in (
         		select (unnest((dic).it_geom)).fid from varnum_senges.atlas )
         	)
         ;
@@ -160,7 +160,7 @@ CREATE TABLE varnum_senges. min_env (id serial PRIMARY KEY, fid_t1 bigint, fid_t
         compte int;
         rec  varnum_senges.u_overlap_sub_type ;
         Begin
-          geo_construct = ( select geom from varnum_senges.rpg53_2018 where fid = $1 ) ;
+          geo_construct = ( select geom from varnum_senges.rpg35_56_2018_v where fid1 = $1 limit 1) ;
           compte = ( select count (*) from (					-- on enregistre le nombre d'entrée dans les intersections pour traitement différencié
                   select fid from varnum_senges.atlas_b where fid = $1)a1 );
       -- 					raise notice 'ite % loop1 à %', (t_row).fid, compte;
@@ -172,7 +172,10 @@ CREATE TABLE varnum_senges. min_env (id serial PRIMARY KEY, fid_t1 bigint, fid_t
                     for rec in select * from varnum_senges.atlas_b where fid = $1
                     loop
       -- 								raise notice 'ite % loop2', rec.fid;
+	  				  if ST_overlaps(geo_construct,  ST_Buffer(rec.geom, -0.001))
+					  then
                       geo_construct = ST_Difference (geo_construct,  ST_Buffer(rec.geom, -0.001));
+					  end if;
                     end loop ;
                 end if;
   -- 			Select ($1).fid, geo_construct  Into rec;
@@ -230,13 +233,14 @@ CREATE INDEX  min_env_idx ON varnum_senges.min_env USING gist (geom);
           then tampon = $5 ;
           insert into varnum_senges. ann_inter (step, fid1, fid2, choix, geom)
                   (Select 'Suff_area', $1,$3, 'neant', $5) ;
+				  return ($3, tampon);
           else
   		-- 				ST_CollectionExtract(ST_Difference( $2, $4),2)   --extraction des lignes
   					if ST_Length(	ST_Intersection (ST_ExteriorRing($5), $2) ) > ST_Length( ST_Intersection (ST_ExteriorRing($5), $4) )
   					then
   						if $1 in (select fid1 from varnum_senges. ann_inter where choix = 'new')
     						then
-    							parent = (select geom from varnum_senges. ann_inter where fid1 = $1 ) ;
+    							parent = (select geom from varnum_senges. ann_inter where fid1 = $1 limit 1 ) ;
     							tampon = ST_MakePolygon(ST_ExteriorRing(ST_Union( parent ,$5))) ;
     							delete from varnum_senges. ann_inter where fid1 = $1 and choix = 'new';
     							insert into varnum_senges. ann_inter (step, fid1, fid2, choix, geom)
@@ -252,7 +256,7 @@ CREATE INDEX  min_env_idx ON varnum_senges.min_env USING gist (geom);
     				else
     						if $3 in (select fid2 from varnum_senges. ann_inter where choix = 'old')
     						then
-    							parent = (select geom from varnum_senges. ann_inter where fid2 = $3 ) ;
+    							parent = (select geom from varnum_senges. ann_inter where fid2 = $3 limit 1) ;
     							tampon = ST_MakePolygon(ST_ExteriorRing(ST_Union( parent ,$5))) ;
     							delete from varnum_senges. ann_inter where fid2 = $3 and choix = 'old';
     							insert into varnum_senges. ann_inter (step, fid1, fid2, choix, geom)
@@ -290,7 +294,7 @@ CREATE INDEX  min_env_idx ON varnum_senges.min_env USING gist (geom);
 			For t_row in select (dic).* from varnum_senges.atlas  --partie 1 : construction de l'annuaire de rattachement des intersections
 			loop
 				var1 = (t_row).fid ;
-				var2 = (Select geom from varnum_senges. min_env where fid_t1= (t_row).fid );
+				var2 = (Select geom from varnum_senges. min_env where fid_t1= (t_row).fid limit 1);
 
 				compte = ( select count (*) from (					-- on enregistre le nombre d'entrée dans les intersections pour traitement différencié
 								select (unnest((dic).it_geom)).fid from varnum_senges.atlas where (dic).fid = (t_row).fid )a1 );
@@ -305,10 +309,10 @@ CREATE INDEX  min_env_idx ON varnum_senges.min_env USING gist (geom);
 
 						reponse = ( select
 							varnum_senges.ann_inter(var1, var2, var3, var4, var5) );
-						raise notice 'cas simple  : %',reponse;
+-- 						raise notice 'cas simple  : %',reponse;
 
 					else
-						raise notice 'cas compliqué % pour %', (select (t_row).fid ), compte;
+-- 						raise notice 'cas compliqué % pour %', (select (t_row).fid ), compte;
 						for rec in (select (unnest((t_row).it_geom)).* )
 						loop
 		-- 					raise notice 'ite % loop2', rec.fid;

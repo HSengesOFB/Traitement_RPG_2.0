@@ -1,10 +1,11 @@
 
 -- Preparation des données
 ALTER TABLE varnum_senges.rpg53_2017
-  ALTER COLUMN geom TYPE geometry(MULTIPOLYGON, 4326)
+  ALTER COLUMN geom TYPE geometry(Geometry, 4326)
     USING ST_SetSRID(geom,4326);
+DROP INDEX IF EXISTS rpg53_2017_idx;
 CREATE INDEX rpg53_2017_idx ON varnum_senges.rpg53_2017 USING gist (geom);
-CREATE index on varnum_senges.rpg53_2017(surf_parc);
+
 
 UPDate varnum_senges. rpg53_2017
 set geom = st_buffer(geom, -0.01);
@@ -134,7 +135,7 @@ insert into varnum_senges. min_env (fid, geom) (
 	select (varnum_senges.min_env(dic)).*  from varnum_senges.atlas
 ) ;
 
-delete from  varnum_senges. min_env where  geom is null;
+delete from  varnum_senges. min_env where  geom is null or ST_AREA(geom)<1;
 
 DROP INDEX IF EXISTS min_env_idx;
 DROP INDEX IF EXISTS min_env_fid_idx ;
@@ -244,10 +245,10 @@ CREATE INDEX  min_env_idx ON varnum_senges.min_env USING gist (geom);
 
 						reponse = ( select
 							varnum_senges.ann_inter(var1, var2, var3, var4, var5) );
-						raise notice 'cas simple  : %',reponse;
+						-- raise notice 'cas simple  : %',reponse;
 
 					else
-						raise notice 'cas compliqué % pour %', (select (t_row).fid ), compte;
+						-- raise notice 'cas compliqué % pour %', (select (t_row).fid ), compte;
 						for rec in (select (unnest((t_row).it_geom)).* )
 						loop
 		-- 					raise notice 'ite % loop2', rec.fid;
@@ -262,11 +263,11 @@ CREATE INDEX  min_env_idx ON varnum_senges.min_env USING gist (geom);
 		end ;
 		$BODY$;
 
-DROP INDEX IF EXISTS ann_inter_idx;
-DROP INDEX IF EXISTS ann_inter_fid_idx ;
+DROP INDEX IF EXISTS _17_inter_idx;
+DROP INDEX IF EXISTS _17_inter_fid_idx ;
 
-CREATE INDEX  ann_inter_fid_idx ON varnum_senges. ann_inter USING btree(choix) WITH (fillfactor = 100);
-CREATE INDEX ann_inter_idx ON varnum_senges. ann_inter USING gist (geom);
+CREATE INDEX  _17_inter_fid_idx ON varnum_senges. ann_inter USING btree(choix) WITH (fillfactor = 100);
+CREATE INDEX _17_inter_idx ON varnum_senges. ann_inter USING gist (geom);
 
 -- Reconstruction de la couche traitée
 insert into varnum_senges.test (geom, geomtype, step, fid1 ) (
@@ -321,5 +322,6 @@ set geom = st_buffer(geom, -0.001);
 
 ALTER TABLE varnum_senges. test ALTER COLUMN geom
 SET DATA TYPE geometry(MultiPolygon) USING ST_Multi(geom);
-ALTER TABLE varnum_senges. test
-Rename to varnum_senges. RPG_2017_56c;
+
+-- ALTER TABLE varnum_senges. test
+-- Rename to varnum_senges. RPG_2017_56c;

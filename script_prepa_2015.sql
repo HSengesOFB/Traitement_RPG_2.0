@@ -1,10 +1,10 @@
 
 -- Preparation des données
 ALTER TABLE varnum_senges.rpg53_2015
-  ALTER COLUMN geom TYPE geometry(MULTIPOLYGON, 4326)
+  ALTER COLUMN geom TYPE geometry(Geometry, 4326)
     USING ST_SetSRID(geom,4326);
+DROP INDEX IF EXISTS rpg53_2015_idx;
 CREATE INDEX rpg53_2015_idx ON varnum_senges.rpg53_2015 USING gist (geom);
-CREATE index on varnum_senges.rpg53_2015(surf_parc);
 
 UPDate varnum_senges. rpg53_2015
 set geom = st_buffer(geom, -0.01);
@@ -134,7 +134,7 @@ insert into varnum_senges. min_env (fid, geom) (
 	select (varnum_senges.min_env(dic)).*  from varnum_senges.atlas
 ) ;
 
-delete from  varnum_senges. min_env where  geom is null;
+delete from  varnum_senges. min_env where  geom is null or ST_AREA(geom)<1;
 
 DROP INDEX IF EXISTS min_env_idx;
 DROP INDEX IF EXISTS min_env_fid_idx ;
@@ -244,10 +244,10 @@ CREATE INDEX  min_env_idx ON varnum_senges.min_env USING gist (geom);
 
 						reponse = ( select
 							varnum_senges.ann_inter(var1, var2, var3, var4, var5) );
-						raise notice 'cas simple  : %',reponse;
+						-- raise notice 'cas simple  : %',reponse;
 
 					else
-						raise notice 'cas compliqué % pour %', (select (t_row).fid ), compte;
+						-- raise notice 'cas compliqué % pour %', (select (t_row).fid ), compte;
 						for rec in (select (unnest((t_row).it_geom)).* )
 						loop
 		-- 					raise notice 'ite % loop2', rec.fid;
@@ -304,11 +304,11 @@ delete from varnum_senges.test where ST_AREA(geom)<10;
 -- 	(SELECT /* (ST_DUMP(sub.geom)).geom AS geometry, ST_GeometryType((ST_DUMP(sub.geom)).geom) As geomtype, sub.step as step, */sub.fid1 as fid1        --columns from your multipolygon table
 -- 		FROM varnum_senges. test as sub where ST_Geometrytype(geom) = 'ST_MultiLineString'       )
 
-DROP INDEX IF EXISTS test_fid_idx;
-DROP INDEX IF EXISTS test_idx ;
+DROP INDEX IF EXISTS _15_fid_idx;
+DROP INDEX IF EXISTS _15_idx ;
 
-CREATE INDEX test_fid_idx ON varnum_senges.test USING btree(fid1) WITH (fillfactor = 100);
-CREATE INDEX test_idx ON varnum_senges.test USING gist (geom);
+CREATE INDEX _15_fid_idx ON varnum_senges.test USING btree(fid1) WITH (fillfactor = 100);
+CREATE INDEX _15_idx ON varnum_senges.test USING gist (geom);
 ALTER TABLE varnum_senges.test
   ALTER COLUMN geom TYPE geometry(POLYGON, 2154)
     USING ST_SetSRID(geom,2154);
@@ -322,6 +322,6 @@ set geom = st_buffer(geom, -0.001);
 ALTER TABLE varnum_senges. test ALTER COLUMN geom
 SET DATA TYPE geometry(MultiPolygon) USING ST_Multi(geom);
 
---Sortie dans couche nettoyée
-ALTER TABLE varnum_senges. test
-Rename to varnum_senges. RPG_2015_56c;
+-- --Sortie dans couche nettoyée
+-- ALTER TABLE varnum_senges. test
+-- Rename to varnum_senges. RPG_2015_56c;
