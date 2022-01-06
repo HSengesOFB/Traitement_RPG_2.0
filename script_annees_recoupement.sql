@@ -1,20 +1,20 @@
 
 -- Preparation des données
-ALTER TABLE varnum_senges.rpg35_56_2018_v
+ALTER TABLE varnum_senges.test_20_19
   ALTER COLUMN geom TYPE geometry(geometry, 4326)
     USING ST_SetSRID(geom,4326);
-	Update varnum_senges. rpg35_56_2018_v as t1 
+	Update varnum_senges. test_20_19 as t1
 	set geom =  ST_MakeValid(t1.geom) where ST_Isvalid(t1.geom) = 'False';
-DROP INDEX IF EXISTS rpg35_56_2018_v_idx;
-CREATE INDEX rpg35_56_2018_v_idx ON varnum_senges.rpg35_56_2018_v USING gist (geom);
+DROP INDEX IF EXISTS test_20_19_idx;
+CREATE INDEX test_20_19_idx ON varnum_senges.test_20_19 USING gist (geom);
 
-ALTER TABLE varnum_senges.rpg35_56_2017_v
+ALTER TABLE varnum_senges.test_18_17
   ALTER COLUMN geom TYPE geometry(geometry, 4326)
     USING ST_SetSRID(geom,4326);
-	Update varnum_senges. rpg35_56_2017_v as t1 
+	Update varnum_senges. test_18_17 as t1
 	set geom =  ST_MakeValid(t1.geom) where ST_Isvalid(t1.geom) = 'False';
-DROP INDEX IF EXISTS rpg35_56_2017_v_idx ;
-CREATE INDEX rpg35_56_2017_v_idx ON varnum_senges.rpg35_56_2017_v USING gist (geom);
+DROP INDEX IF EXISTS test_18_17_idx ;
+CREATE INDEX test_18_17_idx ON varnum_senges.test_18_17 USING gist (geom);
 
 --Preparation de l'environnement
 Drop table IF EXISTS varnum_senges. test;
@@ -47,8 +47,8 @@ DROP TYPE IF EXISTS varnum_senges.u_overlap_type CASCADE ;
       	geom geometry,
       	geomtype character varying(50),
       	step character varying(50),
-      	fid1 bigint,
-      	fid2 bigint,
+      	id1 bigint,
+      	id2 bigint,
       	crossed bigint
       );
 
@@ -76,14 +76,26 @@ CREATE FUNCTION varnum_senges.Exception_Intersection(geometry, geometry) RETURNS
       $$
       LANGUAGE PLPGSQL
       ;
-
+CREATE FUNCTION varnum_senges.Exception_Difference(geometry, geometry) RETURNS geometry
+      AS
+      $$
+      Begin
+      	Return ST_Difference($1,$2);
+      	EXCEPTION
+      	   			when sqlstate 'XX000' then
+      				return $1;
+      	end;
+      $$
+      LANGUAGE PLPGSQL
+      ;
+	  
 CREATE TYPE varnum_senges.u_overlap_sub_type as (fid bigint, geom geometry);
 	CREATE FUNCTION varnum_senges.u_overlap_sub(bigint,geometry) RETURNS varnum_senges.u_overlap_sub_type as
 		$$ SELECT $1, $2	 $$
 		LANGUAGE SQL ;
 
 CREATE TYPE varnum_senges.u_overlap_type as (
-                       fid bigint,
+                       id bigint,
 											 p_geom geometry,
 										   it_geom varnum_senges.u_overlap_sub_type[]
 											);
@@ -93,9 +105,9 @@ CREATE TYPE varnum_senges.u_overlap_type as (
                   RETURNS varnum_senges.u_overlap_type as
 	$$
     SELECT $2, $1, array_agg(f.inter)
-    FROM  (SELECT c2.geom ,  varnum_senges.u_overlap_sub(c2.fid1, 
+    FROM  (SELECT c2.geom ,  varnum_senges.u_overlap_sub(c2.id,
 				varnum_senges.Exception_Intersection($1, c2.geom))as inter
-        FROM varnum_senges.rpg35_56_2017_v  as c2
+        FROM varnum_senges.test_18_17  as c2
         where ST_Overlaps($1, c2.geom) /* and ST_area(st_intersection ($1, c2.geom)) > 1*/
 -- 							    and (ST_GeometryType(st_intersection ($1, c2.geom)) = 'ST_Polygon'
 -- 									or ST_GeometryType(st_intersection ($1, c2.geom)) = 'ST_MultiPolygon')
@@ -105,7 +117,7 @@ CREATE TYPE varnum_senges.u_overlap_type as (
 	LANGUAGE SQL ;
 
 -- Vérification des "overlaps" : opération la plus longue à éviter en ensembliste
--- Select varnum_senges.u_overlap(geom) from varnum_senges.rpg35_56_2018_v ORDER BY surf_parc desc LIMIT 1000 ;
+-- Select varnum_senges.u_overlap(geom) from varnum_senges.test_20_19 ORDER BY surf_parc desc LIMIT 1000 ;
 
 --____Début traitement_____
 
@@ -117,8 +129,8 @@ CREATE TABLE varnum_senges. atlas(
 
 -- repérage et enregistrement des intersections
 	insert into varnum_senges. atlas (dic) (
-		select (varnum_senges.u_overlap(geom, fid1)) FROM (select geom, fid1 from varnum_senges.rpg35_56_2018_v /* LIMIT 1000 */) a1
-	-- 	select (varnum_senges.u_overlap(geom, fid)).* FROM (select geom, fid from varnum_senges.rpg35_56_2018_v LIMIT 10) a1     --! Syntaxe de séparation des colones
+		select (varnum_senges.u_overlap(geom, id)) FROM (select geom, id from varnum_senges.test_20_19 /* LIMIT 1000 */) a1
+	-- 	select (varnum_senges.u_overlap(geom, fid)).* FROM (select geom, fid from varnum_senges.test_20_19 LIMIT 10) a1     --! Syntaxe de séparation des colones
 		);
 
     -- Select (dic).fid from  varnum_senges.atlas;   -- syntaxe d'appel des colones de type composite
@@ -137,9 +149,9 @@ CREATE TABLE varnum_senges. atlas(
 	CREATE INDEX  atlas_b_idx ON varnum_senges.atlas_b USING gist (geom);
 
     --report des cas non problématiques
-    insert into varnum_senges.test (geom, geomtype, step, fid1 ) (
-    	Select c1.geom, ST_GeometryType(c1.geom), 'Report' , c1.fid1
-    	from varnum_senges.rpg35_56_2018_v as c1
+    insert into varnum_senges.test (geom, geomtype, step, id1 ) (
+    	Select c1.geom, ST_GeometryType(c1.geom), 'Report' , c1.id
+    	from varnum_senges.test_20_19 as c1
     	/*where c1.fid1 not in (
     		select (dic).fid from varnum_senges.atlas )
     	*/
@@ -147,14 +159,14 @@ CREATE TABLE varnum_senges. atlas(
 				(
 			SELECT  NULL
 			FROM    varnum_senges.atlas t1
-			WHERE   (t1.dic).fid = c1.fid1
+			WHERE   (t1.dic).id = c1.id
 				)
 		)
     ;
 
-        insert into varnum_senges.test (geom, geomtype, step, fid2 ) (
-        	Select c1.geom, ST_GeometryType(c1.geom), 'Report' , c1.fid1
-        	from varnum_senges.rpg35_56_2017_v as c1
+        insert into varnum_senges.test (geom, geomtype, step, id2 ) (
+        	Select c1.geom, ST_GeometryType(c1.geom), 'Report' , c1.id
+        	from varnum_senges.test_18_17 as c1
         	/*where c1.fid1 not in (
         		select distinct fid from varnum_senges.atlas_b )
 				--(unnest((dic).it_geom)).fid from varnum_senges.atlas ) */
@@ -162,12 +174,13 @@ CREATE TABLE varnum_senges. atlas(
 				(
 			SELECT  NULL
 			FROM    varnum_senges.atlas_b t1
-			WHERE   t1.fid = c1.fid1
+			WHERE   t1.fid = c1.id
 				)
         	)
         ;
 
-
+--suppresion des doublons éventuels
+delete from  varnum_senges.test where id1 is null and id2 is null;
 
 -- construction des enveloppes minimales :
 CREATE TABLE varnum_senges. min_env (id serial PRIMARY KEY, fid_t1 bigint, fid_t2 bigint, geom geometry);
@@ -186,18 +199,18 @@ CREATE TABLE varnum_senges. min_env (id serial PRIMARY KEY, fid_t1 bigint, fid_t
 						) FROM (select unnest(($1).it_geom)) table_a  );
 	-- 					raise notice 'ite % loop1 à %', (t_row).fid, compte;
 							if compte = 1
-								then geo_construct = ST_Difference (geo_construct,  (unnest(($1).it_geom)).geom ) ;
+								then geo_construct = varnum_senges.Exception_Difference (geo_construct,  (unnest(($1).it_geom)).geom ) ;
 								else
 		-- 							raise notice 'cas compliqué %', (select (unnest((t_row).it_geom)).fid limit 1);
 									for rec in select (unnest(($1).it_geom)).*
 									loop
 		-- 								raise notice 'ite % loop2', rec.fid;
-										geo_construct = ST_Difference (geo_construct,  ST_Buffer(rec.geom, -0.001));
+										geo_construct = varnum_senges.Exception_Difference (geo_construct,  ST_Buffer(rec.geom, -0.001));
 									end loop ;
 							end if;
 -- 			Select ($1).fid, geo_construct  Into rec;
 -- 			return rec;
-			 return varnum_senges.u_overlap_sub(($1).fid, geo_construct );
+			 return varnum_senges.u_overlap_sub(($1).id, geo_construct );
 			end;
 		$body$
 		LANGUAGE plpgSQL;
@@ -210,19 +223,19 @@ CREATE TABLE varnum_senges. min_env (id serial PRIMARY KEY, fid_t1 bigint, fid_t
         compte int;
         rec  varnum_senges.u_overlap_sub_type ;
         Begin
-          geo_construct = (select geom from varnum_senges.rpg35_56_2017_v where fid1 = $1 limit 1) ;
+          geo_construct = (select geom from varnum_senges.test_18_17 where id = $1 limit 1) ;
           compte = (select count (*) from (					-- on enregistre le nombre d'entrée dans les intersections pour traitement différencié
                   select fid from varnum_senges.atlas_b where fid = $1)a1 );
       -- 					raise notice 'ite % loop1 à %', (t_row).fid, compte;
                 if compte = 1
                   then  geo_diff = ( select geom from varnum_senges.atlas_b where fid = $1 );
-                        geo_construct = ( select ST_Difference (geo_construct,  geo_diff) );
+                        geo_construct = ( select varnum_senges.Exception_Difference (geo_construct,  geo_diff) );
                   else
       -- 							raise notice 'cas compliqué %', (select (unnest((t_row).it_geom)).fid limit 1);
                     for rec in select * from varnum_senges.atlas_b where fid = $1
                     loop
       -- 								raise notice 'ite % loop2', rec.fid;
-                      geo_construct = ST_Difference (geo_construct,  ST_Buffer(rec.geom, -0.001));
+                      geo_construct = varnum_senges.Exception_Difference (geo_construct,  ST_Buffer(rec.geom, -0.001));
                     end loop ;
                 end if;
   -- 			Select ($1).fid, geo_construct  Into rec;
@@ -255,7 +268,7 @@ CREATE INDEX  min_env_idx ON varnum_senges.min_env USING gist (geom);
 -- Arbitrage des fusions des intersections : Minenv full mandatory !!!
 	Drop table IF EXISTS varnum_senges. ann_inter ;
 	DROP FUNCTION if EXISTS  varnum_senges.ann_inter ;
-	CREATE TABLE varnum_senges. ann_inter (id serial PRIMARY KEY, step character varying (20), fid1 bigint, fid2 bigint, choix varchar(6), geom geometry);
+	CREATE TABLE varnum_senges. ann_inter (id serial PRIMARY KEY, step character varying (20), id1 bigint, id2 bigint, choix varchar(6), geom geometry);
 
 	CREATE FUNCTION varnum_senges.ann_inter(bigint, geometry, bigint, geometry, geometry) RETURNS varnum_senges.u_overlap_sub_type as
 		$body$
@@ -271,31 +284,31 @@ CREATE INDEX  min_env_idx ON varnum_senges.min_env USING gist (geom);
 					or ST_intersects($4, $5) = 'False'
 				then
 					tampon = ST_MakePolygon( ST_GeomFromText('LINESTRING(0 0, 0 0, 0 0, 0 0)'));  -- polygon null : 0103000000010000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-					insert into varnum_senges. ann_inter (step, fid1, fid2, choix)
+					insert into varnum_senges. ann_inter (step, id1, id2, choix)
 									(Select 'Insuff_area', $1,$3, 'neant') ;
 					return ($1, tampon);  -- retour pour controle
 				else
           if ST_AREA($5) > 150   -- cas ou l'on maintient l'intersection car suffisante par la taille
           then tampon = $5 ;
-          insert into varnum_senges. ann_inter (step, fid1, fid2, choix, geom)
+          insert into varnum_senges. ann_inter (step, id1, id2, choix, geom)
                   (Select 'Suff_area', $1,$3, 'neant', $5) ;
 				  return ($1, tampon);
           else
   		-- 				ST_CollectionExtract(ST_Difference( $2, $4),2)   --extraction des lignes
   					if ST_Length(	ST_Intersection (ST_ExteriorRing($5), $2) ) > ST_Length( ST_Intersection (ST_ExteriorRing($5), $4) )
   					then
-  						if $1 in (select distinct fid1 from varnum_senges. ann_inter where choix = 'new')
+  						if $1 in (select distinct id1 from varnum_senges. ann_inter where choix = 'new')
     						then
     							parent = (select distinct geom from varnum_senges. ann_inter
-										  where fid1 = $1 and step in ('Recursiv', 'No_Pbm', 'Suff_area') limit 1 ) ;
+										  where id1 = $1 and step in ('Recursiv', 'No_Pbm', 'Suff_area') limit 1 ) ;
     							tampon = ST_MakePolygon(ST_ExteriorRing(varnum_senges.Exception_Union( parent ,$5))) ;
-    							delete from varnum_senges. ann_inter where fid1 = $1 and choix = 'new';
-    							insert into varnum_senges. ann_inter (step, fid1, fid2, choix, geom)
+    							delete from varnum_senges. ann_inter where id1 = $1 and choix = 'new';
+    							insert into varnum_senges. ann_inter (step, id1, id2, choix, geom)
     								(Select 'Recursiv', $1,$3, 'new',tampon ) ;
 
     						else
     							tampon = ST_MakePolygon(ST_ExteriorRing(varnum_senges.Exception_Union( $2 ,$5))) ;
-    							insert into varnum_senges. ann_inter (step, fid1, fid2, choix, geom)
+    							insert into varnum_senges. ann_inter (step, id1, id2, choix, geom)
     								(Select 'No_pbm', $1,$3, 'new', tampon) ;
 
     						end if;
@@ -303,17 +316,17 @@ CREATE INDEX  min_env_idx ON varnum_senges.min_env USING gist (geom);
     						Return ($1, tampon )  ;
     							-- Raise Notice 'choix a %', $1;
     				else
-    						if $3 in (select distinct fid2 from varnum_senges. ann_inter where choix = 'old')
+    						if $3 in (select distinct id2 from varnum_senges. ann_inter where choix = 'old')
     						then
     							parent = (select distinct  geom from varnum_senges. ann_inter
-										  where fid2 = $3 and step in ('Recursiv', 'No_Pbm', 'Suff_area') limit 1 ) ;
+										  where id2 = $3 and step in ('Recursiv', 'No_Pbm', 'Suff_area') limit 1 ) ;
     							tampon = ST_MakePolygon(ST_ExteriorRing(varnum_senges.Exception_Union( parent ,$5))) ;
-    							delete from varnum_senges. ann_inter where fid2 = $3 and choix = 'old';
-    							insert into varnum_senges. ann_inter (step, fid1, fid2, choix, geom)
+    							delete from varnum_senges. ann_inter where id2 = $3 and choix = 'old';
+    							insert into varnum_senges. ann_inter (step, id1, id2, choix, geom)
     								(select 'Recursiv', $1,$3, 'old',tampon ) ;
     						else
     							tampon = ST_MakePolygon(ST_ExteriorRing(varnum_senges.Exception_Union( $4,$5))) ;
-    							insert into varnum_senges. ann_inter (step, fid1, fid2, choix, geom)
+    							insert into varnum_senges. ann_inter (step, id1, id2, choix, geom)
     								(select 'No_pbm', $1,$3, 'old', tampon) ;  --!!
     						end if;
 
@@ -348,8 +361,8 @@ CREATE INDEX  min_env_idx ON varnum_senges.min_env USING gist (geom);
 			loop
 				var0 = o_row.id;
 				t_row = o_row.dic;
-				var1 = (t_row).fid ;
-				var2 = (Select geom from varnum_senges. min_env where fid_t1= (t_row).fid limit 1);
+				var1 = (t_row).id ;
+				var2 = (Select geom from varnum_senges. min_env where fid_t1= (t_row).id limit 1);
 
 				compte = ( select json_array_length(
 						JSON_AGG (ROW_TO_JSON(table_a))
@@ -401,14 +414,14 @@ where step != 'Insuff_area' and ST_SRID(geom) is null ;
   	BEGIN
       For t_row in select * from varnum_senges.ann_inter where step = 'Suff_area' order by id asc limit 70000
       loop
-        fidT1 =  t_row.fid1;
-        fidT2 =  t_row.fid2;
+        fidT1 =  t_row.id1;
+        fidT2 =  t_row.id2;
         -- repérage des min_env < 150  déjà aggrégées
         if EXISTS
 				(
 			SELECT  NULL
 			FROM    varnum_senges.ann_inter
-			WHERE   fid1 = fidT1
+			WHERE   id1 = fidT1
 					and step in ('P2-t1-2_agg','P2-t1_agg')
 				)
 -- 		Alternative non-optimisée :
@@ -420,7 +433,7 @@ where step != 'Insuff_area' and ST_SRID(geom) is null ;
 				(
 			SELECT  NULL
 			FROM    varnum_senges.ann_inter
-			WHERE   fid2 = fidT2
+			WHERE   id2 = fidT2
 					and step in ('P2-t1-2_agg','P2-t2_agg')
 				)
 
@@ -436,7 +449,7 @@ where step != 'Insuff_area' and ST_SRID(geom) is null ;
 				(
 			SELECT  NULL
 			FROM    varnum_senges.ann_inter
-			WHERE   fid2 = fidT2
+			WHERE   id2 = fidT2
 					and step in ('P2-t1-2_agg','P2-t2_agg')
 				)
 		  then
@@ -453,13 +466,13 @@ where step != 'Insuff_area' and ST_SRID(geom) is null ;
           if ST_AREA(geom_t2)  > 150 and St_Area(geom_t2)/ST_PERIMETER(geom_t2) > 0.01
 		  -- cas de conservation des trois
           then
-			insert into varnum_senges. ann_inter (step, fid1, geom)
+			insert into varnum_senges. ann_inter (step, id1, geom)
             (select 'P2-t1_keep', fidT1, geom_t1 ) ;
-            insert into varnum_senges. ann_inter (step, fid2, geom)
+            insert into varnum_senges. ann_inter (step, id2, geom)
             (select 'P2-t2_keep', fidT2, geom_t2 ) ;
-			insert into varnum_senges. ann_inter (step, fid1, fid2, geom)
+			insert into varnum_senges. ann_inter (step, id1, id2, geom)
             (select 'P2-inter_keep', fidT1, fidT2, t_row.geom) ;
-			delete from varnum_senges. ann_inter where fid1 = fidT1 and fid2 = fidT2 and step='Suff_area';
+			delete from varnum_senges. ann_inter where id1 = fidT1 and id2 = fidT2 and step='Suff_area';
 -- 				raise notice 'triple conservation, %, %', fidT1, fidT2;
 
 
@@ -469,11 +482,11 @@ where step != 'Insuff_area' and ST_SRID(geom) is null ;
               then tampon = t_row.geom;
 			  end if ;
 -- 			      raise notice 'geom t2 : % , %' , fidT2, ST_SRID(geom_t2);
-            insert into varnum_senges. ann_inter (step, fid1, geom)
+            insert into varnum_senges. ann_inter (step, id1, geom)
             (select 'P2-t1_keep', fidT1, geom_t1 ) ;
-            insert into varnum_senges. ann_inter (step, fid1, fid2, geom)
+            insert into varnum_senges. ann_inter (step, id1, id2, geom)
             (select 'P2-t2_agg', fidT1, fidT2, tampon) ;
-            delete from varnum_senges. ann_inter where fid1 = fidT1 and fid2 = fidT2 and step='Suff_area';
+            delete from varnum_senges. ann_inter where id1 = fidT1 and id2 = fidT2 and step='Suff_area';
           end if;
         else
           if ST_AREA(geom_t2)  > 150 and St_Area(geom_t2)/ST_PERIMETER(geom_t2) > 0.01
@@ -484,11 +497,11 @@ where step != 'Insuff_area' and ST_SRID(geom) is null ;
               else tampon = (varnum_senges.Exception_Union(t_row.geom , geom_t1 )) ;
               end if ;
 -- 			        raise notice 'geom t1 : % , %' , fidT1, ST_SRID(geom_t1);
-            insert into varnum_senges. ann_inter (step, fid1, fid2, geom)
+            insert into varnum_senges. ann_inter (step, id1, id2, geom)
             (select 'P2-t1_agg', fidT1, fidT2, tampon) ;
-            insert into varnum_senges. ann_inter (step, fid2, geom)
+            insert into varnum_senges. ann_inter (step, id2, geom)
             (select 'P2-t2_keep', fidT2, geom_t2 ) ;
-            delete from varnum_senges. ann_inter where fid1 = fidT1 and fid2 = fidT2 and step='Suff_area';
+            delete from varnum_senges. ann_inter where id1 = fidT1 and id2 = fidT2 and step='Suff_area';
           else   --cas de conservation de l'inter seul
               if ST_SRID(geom_t1) = 0 or St_Area(geom_t1)/ST_PERIMETER(geom_t1) < 0.01
               then tampon = t_row.geom;
@@ -499,9 +512,9 @@ where step != 'Insuff_area' and ST_SRID(geom) is null ;
               else tampon = (varnum_senges.Exception_Union(tampon, geom_t2 )) ;
               end if ;
 -- 			      raise notice 'geom dbl : % , %, %, %' ,fidT1, ST_SRID(geom_t1), fidT2, ST_SRID(geom_t2);
-            insert into varnum_senges. ann_inter (step, fid1, fid2, geom)
+            insert into varnum_senges. ann_inter (step, id1, id2, geom)
             (select 'P2-t1-2_agg', fidT1, fidT2, tampon) ;
-            delete from varnum_senges. ann_inter where fid1 = fidT1 and fid2 = fidT2 and step='Suff_area';
+            delete from varnum_senges. ann_inter where id1 = fidT1 and id2 = fidT2 and step='Suff_area';
           end if;
         end if;
       end loop;
@@ -523,24 +536,24 @@ where step != 'Insuff_area' and ST_SRID(geom) is null ;
   	BEGIN
       For t_row in select * from varnum_senges.ann_inter where step in  ('Recursiv', 'No_Pbm')
       loop
-        fidT1 =  t_row.fid1;
-        fidT2 =  t_row.fid2;
+        fidT1 =  t_row.id1;
+        fidT2 =  t_row.id2;
 
         if EXISTS
 				(
 			SELECT  NULL
 			FROM    varnum_senges.ann_inter
-			WHERE   fid1 = fidT1 and fid1 = fidT1
+			WHERE   id1 = fidT1 and id1 = fidT1
 					and step in ('P2-t1-2_agg','P2-t2_agg','P2-t1_agg','P2-inter_keep' )
 				)
 
 		then
 			For x_row in select * from varnum_senges.ann_inter where step in ('P2-t1-2_agg','P2-t2_agg','P2-t1_agg','P2-inter_keep' )
-			and fid1 = fidT1 and fid1 = fidT1
+			and id1 = fidT1 and id2 = fidT2
 			loop
 				if ST_Contains(x_row.geom, t_row.geom)
 				then
-					delete from varnum_senges. ann_inter where fid1 = fidT1 and fid2 = fidT2 and step= t_row.step;
+					delete from varnum_senges. ann_inter where id1 = fidT1 and id2 = fidT2 and step= t_row.step;
         		end if;
 			end loop;
 
@@ -556,37 +569,37 @@ CREATE INDEX  ann_inter_fid_idx ON varnum_senges. ann_inter USING btree(choix) W
 CREATE INDEX ann_inter_idx ON varnum_senges. ann_inter USING gist (geom);
 
 -- Reconstruction de la couche traitée
-insert into varnum_senges.test (geom, geomtype, step, fid1, fid2 ) (
-	Select c1.geom, ST_GeometryType(c1.geom), 'reconstruit' , c1.fid1, c1.fid2
+insert into varnum_senges.test (geom, geomtype, step, id1, id2 ) (
+	Select c1.geom, ST_GeometryType(c1.geom), 'reconstruit' , c1.id1, c1.id2
 	from varnum_senges.ann_inter as c1
 	where c1.geom is not null
 	)
 ;
 
-insert into varnum_senges.test (geom, geomtype, step, fid1 ) (
+insert into varnum_senges.test (geom, geomtype, step, id1 ) (
 	WITH dump AS (
-		SELECT  (ST_DUMP(sub.geom)).geom AS geometry, ST_GeometryType((ST_DUMP(sub.geom)).geom) As geomtype, sub.step as step, sub.fid1 as fid1        --columns from your multipolygon table
-		FROM varnum_senges. test as sub where ST_Geometrytype(geom) = 'ST_MultiPolygon'
+		SELECT  (ST_DUMP(sub.geom)).geom AS geometry, ST_GeometryType((ST_DUMP(sub.geom)).geom) As geomtype, sub.step as step, sub.id1 as id1        --columns from your multipolygon table
+		FROM varnum_senges. test as sub where ST_Geometrytype(geom) <> 'ST_Polygon'
 	)
 
-	SELECT  geometry::geometry(Polygon,4326), geomtype, step, fid1    --type cast using SRID from multipolygon
+	SELECT  geometry::geometry(Polygon,4326), geomtype, step, id1    --type cast using SRID from multipolygon
 	  FROM dump
 	);
 
 delete from varnum_senges.test where ST_Geometrytype(geom) = 'ST_MultiPolygon'  ;
 -- spe TxT : pas de polygon de moins de 10
-delete from varnum_senges.test where ST_AREA(geom)<10 ;
+delete from varnum_senges.test where ST_AREA(geom)<100 or ST_area(geom)/ST_perimeter(geom)<0.01 ;
 
 -- probleme de MultiLine String
 -- 	select geom, geomtype, step, fid1 from varnum_senges. test where fid1 in
 -- 	(SELECT /* (ST_DUMP(sub.geom)).geom AS geometry, ST_GeometryType((ST_DUMP(sub.geom)).geom) As geomtype, sub.step as step, */sub.fid1 as fid1        --columns from your multipolygon table
 -- 		FROM varnum_senges. test as sub where ST_Geometrytype(geom) = 'ST_MultiLineString'       )
 
-DROP INDEX IF EXISTS test_fid_idx;
-DROP INDEX IF EXISTS test_idx ;
+DROP INDEX IF EXISTS work_fid_idx;
+DROP INDEX IF EXISTS work_idx ;
 
-CREATE INDEX test_fid_idx ON varnum_senges.test USING btree(fid1) WITH (fillfactor = 100);
-CREATE INDEX test_idx ON varnum_senges.test USING gist (geom);
+CREATE INDEX work20_17_fid_idx ON varnum_senges.test USING btree(id1) WITH (fillfactor = 100);
+CREATE INDEX work20_17_idx ON varnum_senges.test USING gist (geom);
 ALTER TABLE varnum_senges.test
   ALTER COLUMN geom TYPE geometry(POLYGON, 2154)
     USING ST_SetSRID(geom,2154);

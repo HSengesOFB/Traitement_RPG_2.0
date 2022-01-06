@@ -1,14 +1,14 @@
 
 -- Preparation des données
-ALTER TABLE varnum_senges.rpg53_2017
+ALTER TABLE varnum_senges.rpg53_2020
   ALTER COLUMN geom TYPE geometry(Geometry, 4326)
     USING ST_SetSRID(geom,4326);
-DROP INDEX IF EXISTS rpg53_2017_idx;
-CREATE INDEX rpg53_2017_idx ON varnum_senges.rpg53_2017 USING gist (geom);
+DROP INDEX IF EXISTS rpg53_2020_idx;
 
 
-UPDate varnum_senges. rpg53_2017
+UPDate varnum_senges. rpg53_2020
 set geom = st_buffer(geom, -0.01);
+CREATE INDEX rpg53_2020_idx ON varnum_senges.rpg53_2020 USING gist (geom);
 
 --Preparation de l'environnement
 Drop table IF EXISTS varnum_senges. test;
@@ -50,7 +50,7 @@ CREATE TYPE varnum_senges.u_overlap_type as (fid bigint,
 	$$
 					SELECT $2::bigint, $1, array_agg(f.inter)
 						FROM  (SELECT c2.geom ,  varnum_senges.u_overlap_sub(c2.fid, ST_Intersection($1, c2.geom))as inter
-								FROM varnum_senges.rpg53_2017  as c2
+								FROM varnum_senges.rpg53_2020  as c2
 								where ST_Overlaps($1, c2.geom)
 -- 							    and (ST_GeometryType(st_intersection ($1, c2.geom)) = 'ST_Polygon'
 -- 									or ST_GeometryType(st_intersection ($1, c2.geom)) = 'ST_MultiPolygon')
@@ -60,14 +60,14 @@ CREATE TYPE varnum_senges.u_overlap_type as (fid bigint,
 	LANGUAGE SQL ;
 
 -- Vérification des "overlaps" : opération la plus longue à éviter en ensembliste
--- Select varnum_senges.u_overlap(geom) from varnum_senges.rpg53_2017 ORDER BY surf_parc desc LIMIT 1000 ;
+-- Select varnum_senges.u_overlap(geom) from varnum_senges.rpg53_2020 ORDER BY surf_parc desc LIMIT 1000 ;
 
 --____Début traitement_____
 
 --corrections des non-valide
-UPDATE 	varnum_senges. rpg53_2017 SET geom = ST_MakeValid(geom) where fid in (
+UPDATE 	varnum_senges. rpg53_2020 SET geom = ST_MakeValid(geom) where fid in (
 select c1.fid from
-	varnum_senges. rpg53_2017 as c1 where
+	varnum_senges. rpg53_2020 as c1 where
 	/* geomtype <> 'ST_Polygon' OR st_isSimple(geom) = 'False' OR */
 	st_isValid(geom) = 'False'
 	);
@@ -81,8 +81,8 @@ CREATE TABLE varnum_senges. atlas(
 
 -- repérage et enregistrement des intersections
 	insert into varnum_senges. atlas (dic) (
-		select (varnum_senges.u_overlap(geom, fid)) FROM (select geom, fid from varnum_senges.rpg53_2017 /* LIMIT 1000 */) a1
-	-- 	select (varnum_senges.u_overlap(geom, fid)).* FROM (select geom, fid from varnum_senges.rpg53_2017 LIMIT 10) a1     --! Syntaxe de séparation des colones
+		select (varnum_senges.u_overlap(geom, fid)) FROM (select geom, fid from varnum_senges.rpg53_2020 /* LIMIT 1000 */) a1
+	-- 	select (varnum_senges.u_overlap(geom, fid)).* FROM (select geom, fid from varnum_senges.rpg53_2020 LIMIT 10) a1     --! Syntaxe de séparation des colones
 		);
 
 	-- Select (dic).fid from  varnum_senges.atlas;   -- syntaxe d'appel des colones de type composite
@@ -91,7 +91,7 @@ CREATE TABLE varnum_senges. atlas(
 --report des cas non problématiques
 insert into varnum_senges.test (geom, geomtype, step, fid1 ) (
 	Select c1.geom, ST_GeometryType(c1.geom), 'Report' , c1.fid
-  FROM    varnum_senges.rpg53_2017 as c1
+	FROM    varnum_senges.rpg53_2020 as c1
 		WHERE   NOT EXISTS
 			(
 			SELECT  NULL
@@ -112,10 +112,11 @@ CREATE TABLE varnum_senges. min_env (id serial PRIMARY KEY, fid bigint, geom geo
 			rec  varnum_senges.u_overlap_sub_type ;
 			Begin
 				geo_construct = ($1).p_geom ;
-        -- on enregistre le nombre d'entrée dans les intersections pour traitement différencié
-        compte = ( select json_array_length(
-            JSON_AGG (ROW_TO_JSON(table_a))
-            ) FROM (select unnest(($1).it_geom)) table_a  );
+				-- on enregistre le nombre d'entrée dans les intersections pour traitement différencié
+				compte = ( select json_array_length(
+						JSON_AGG (ROW_TO_JSON(table_a))
+						) FROM (select unnest(($1).it_geom)) table_a  );
+				
 		-- 					raise notice 'ite % loop1 à %', (t_row).fid, compte;
 							if compte = 1
 								then geo_construct = ST_Difference (geo_construct,  (unnest(($1).it_geom)).geom ) ;
@@ -238,6 +239,8 @@ CREATE INDEX  min_env_idx ON varnum_senges.min_env USING gist (geom);
 				var1 = (t_row).fid ;
 				var2 = (Select geom from varnum_senges. min_env where fid=(t_row).fid );
 
+-- 				compte = ( select count (*) from (					-- on enregistre le nombre d'entrée dans les intersections pour traitement différencié
+-- 								select (unnest((dic).it_geom)).fid from varnum_senges.atlas where (dic).fid = (t_row).fid )a1 );
 				compte = ( select json_array_length(
 						JSON_AGG (ROW_TO_JSON(table_a))
 						) FROM (select unnest((t_row).it_geom)) table_a  );
@@ -270,11 +273,11 @@ CREATE INDEX  min_env_idx ON varnum_senges.min_env USING gist (geom);
 		end ;
 		$BODY$;
 
-DROP INDEX IF EXISTS _17_inter_idx;
-DROP INDEX IF EXISTS _17_inter_fid_idx ;
+DROP INDEX IF EXISTS _20_inter_idx;
+DROP INDEX IF EXISTS _20_inter_fid_idx ;
 
-CREATE INDEX  _17_inter_fid_idx ON varnum_senges. ann_inter USING btree(choix) WITH (fillfactor = 100);
-CREATE INDEX _17_inter_idx ON varnum_senges. ann_inter USING gist (geom);
+CREATE INDEX  _20_inter_fid_idx ON varnum_senges. ann_inter USING btree(choix) WITH (fillfactor = 100);
+CREATE INDEX _20_inter_idx ON varnum_senges. ann_inter USING gist (geom);
 
 -- Reconstruction de la couche traitée
 insert into varnum_senges.test (geom, geomtype, step, fid1 ) (
@@ -329,6 +332,6 @@ set geom = st_buffer(geom, -0.001);
 
 ALTER TABLE varnum_senges. test ALTER COLUMN geom
 SET DATA TYPE geometry(MultiPolygon) USING ST_Multi(geom);
-
+--
 -- ALTER TABLE varnum_senges. test
--- Rename to varnum_senges. RPG_2017_56c;
+-- Rename to varnum_senges. RPG_2020_56c;

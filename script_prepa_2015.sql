@@ -90,11 +90,15 @@ CREATE TABLE varnum_senges. atlas(
 --report des cas non problématiques
 insert into varnum_senges.test (geom, geomtype, step, fid1 ) (
 	Select c1.geom, ST_GeometryType(c1.geom), 'Report' , c1.fid
-	from varnum_senges.rpg53_2015 as c1
-	where c1.id not in (
-		select (unnest((dic).it_geom)).fid from varnum_senges.atlas )
-	)
-;
+  FROM    varnum_senges.rpg53_2015 as c1
+		WHERE   NOT EXISTS
+			(
+			SELECT  NULL
+			FROM    varnum_senges.atlas t1
+			WHERE   (t1.dic).fid = c1.fid
+			)
+    	)
+    ;
 
 -- construction des enveloppes minimales :
 CREATE TABLE varnum_senges. min_env (id serial PRIMARY KEY, fid bigint, geom geometry);
@@ -107,8 +111,10 @@ CREATE TABLE varnum_senges. min_env (id serial PRIMARY KEY, fid bigint, geom geo
 			rec  varnum_senges.u_overlap_sub_type ;
 			Begin
 				geo_construct = ($1).p_geom ;
-				compte = ( select count (*) from (					-- on enregistre le nombre d'entrée dans les intersections pour traitement différencié
-								select (unnest((dic).it_geom)).fid from varnum_senges.atlas where (dic).fid = ($1).fid )a1 );
+        -- on enregistre le nombre d'entrée dans les intersections pour traitement différencié
+        compte = ( select json_array_length(
+            JSON_AGG (ROW_TO_JSON(table_a))
+            ) FROM (select unnest(($1).it_geom)) table_a  );
 		-- 					raise notice 'ite % loop1 à %', (t_row).fid, compte;
 							if compte = 1
 								then geo_construct = ST_Difference (geo_construct,  (unnest(($1).it_geom)).geom ) ;
@@ -231,8 +237,9 @@ CREATE INDEX  min_env_idx ON varnum_senges.min_env USING gist (geom);
 				var1 = (t_row).fid ;
 				var2 = (Select geom from varnum_senges. min_env where fid=(t_row).fid );
 
-				compte = ( select count (*) from (					-- on enregistre le nombre d'entrée dans les intersections pour traitement différencié
-								select (unnest((dic).it_geom)).fid from varnum_senges.atlas where (dic).fid = (t_row).fid )a1 );
+				compte = ( select json_array_length(
+						JSON_AGG (ROW_TO_JSON(table_a))
+						) FROM (select unnest((t_row).it_geom)) table_a  );
 		-- 					raise notice 'ite % loop1 à %', (t_row).fid, compte;
 					if compte = 1
 					then
